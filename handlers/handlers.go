@@ -332,7 +332,7 @@ func (h *handle) GetCostByDateRange(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	//get the service name from the url and validate it
-	service_name := chi.URLParam(r, "service_name")
+	service_name := r.URL.Query().Get("service_name")
 	if service_name == "" {
 		http.Error(w, `{"error": "invalid service name"}`, http.StatusBadRequest)
 		return

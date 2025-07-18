@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/Joshdike/subscriptions_aggregator/handlers"
+	mw "github.com/Joshdike/subscriptions_aggregator/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,12 +46,15 @@ func main() {
 
 	// Define routes and their handler functions
 	r.Post("/subscriptions", h.CreateSubscription)
-	r.Get("/subscriptions", h.GetSubscriptions)
+	r.Get("/subscriptions/user/{user_id}", h.GetSubscriptionByUserID)
 	r.Get("/subscriptions/{id}", h.GetSubscriptionByID)
-	r.Put("/subscriptions/{id}", h.UpdateSubscription)
-	r.Delete("/subscriptions/{id}", h.DeleteSubscription)
+	r.Post("/subscriptions/{id}", h.RenewSubscription)
+	r.Delete("/subscriptions/{id}", h.DeleteSubscription) //id is the subscription id not the user id. it's a soft delete
 
-	r.Get("/costs/{id}?from={from}&to={to}&service={service}", h.GetCostByDateRange)
+	r.Get("/costs/{user_id}", h.GetCostByDateRange)
+
+	// Admin routes
+	r.With(mw.AdminSecretMiddleware(os.Getenv("SECRET_KEY"))).Get("/subscriptions", h.GetSubscriptions)
 
 	// Get the port from environment variable and start the server
 	port := fmt.Sprintf(":%s", os.Getenv("PORT"))

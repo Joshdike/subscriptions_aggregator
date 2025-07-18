@@ -1,2 +1,7 @@
-//things to consider: using post request for costs might be better
-subscription creation example has user_id so i don't need to generate them
+
+- validation:
+
+ + make sure that for the same user, you cannot subscribe twice to the same service in overlapping time regions
+
+pagination
+filters (active), sorting by dates

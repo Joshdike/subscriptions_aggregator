@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/Joshdike/subscriptions_aggregator/handlers"
-	mw "github.com/Joshdike/subscriptions_aggregator/middleware"
+	"github.com/Joshdike/subscriptions_aggregator/internal/handlers"
+	mw "github.com/Joshdike/subscriptions_aggregator/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"

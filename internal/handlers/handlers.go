@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Joshdike/subscriptions_aggregator/models"
-	"github.com/Joshdike/subscriptions_aggregator/utils"
+	"github.com/Joshdike/subscriptions_aggregator/internal/models"
+	"github.com/Joshdike/subscriptions_aggregator/internal/utils"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"

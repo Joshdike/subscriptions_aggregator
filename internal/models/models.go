@@ -42,3 +42,13 @@ func NewSubscriptionResponse(sub Subscription) SubscriptionResponse {
 		EndDate:     sub.EndDate.Format("01-2006"),
 	}
 }
+
+func RequestToSubscription(sub SubscriptionRequest, start, end time.Time) Subscription {
+	return Subscription{
+		ServiceName: sub.ServiceName,
+		Price:       sub.Price,
+		UserID:      sub.UserID,
+		StartDate:   start,
+		EndDate:     end,
+	}
+}

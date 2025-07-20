@@ -9,6 +9,7 @@ import (
 
 	"github.com/Joshdike/subscriptions_aggregator/internal/handlers"
 	mw "github.com/Joshdike/subscriptions_aggregator/internal/middleware"
+	"github.com/Joshdike/subscriptions_aggregator/internal/repository/pg"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,15 +42,18 @@ func main() {
 	r.Use(middleware.Logger)    // Middleware for logging
 	r.Use(middleware.Recoverer) // Middleware for recovering from panics
 
-	// Create a new handler with the database connection pool
-	h := handlers.New(pool)
+	// Create a new Subscription repository
+	subRepo := pg.NewSubscriptionRepo(pool)
+
+	// Create a new Subscription handler
+	h := handlers.New(subRepo)
 
 	// Define routes and their handler functions
 	r.Post("/subscriptions", h.CreateSubscription)
 	r.Get("/subscriptions/user/{user_id}", h.GetSubscriptionByUserID)
 	r.Get("/subscriptions/{id}", h.GetSubscriptionByID)
-	r.Post("/subscriptions/{id}", h.RenewSubscription)
-	r.Delete("/subscriptions/{id}", h.DeleteSubscription) //id is the subscription id not the user id. it's a soft delete
+	r.Post("/subscriptions/{id}", h.RenewOrExtendSubscription)
+	r.Delete("/subscriptions/{id}", h.DeleteSubscription)
 
 	r.Get("/costs/{user_id}", h.GetCostByDateRange)
 

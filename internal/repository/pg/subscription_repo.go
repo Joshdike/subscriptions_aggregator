@@ -2,6 +2,7 @@ package pg
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -75,38 +76,141 @@ func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.SubscriptionRes
 
 	rows, err := s.pool.Query(ctx, query, params...)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no subscriptions found")
+		}
 		return nil, fmt.Errorf("error getting subscriptions: %w", err)
 	}
 
 	var subscriptions []models.SubscriptionResponse
 	for rows.Next() {
-		var subscription models.SubscriptionResponse
-		err = rows.Scan(&subscription.ID, &subscription.ServiceName, &subscription.Price, &subscription.UserID, &subscription.StartDate, &subscription.EndDate)
+		var sub models.Subscription
+		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning subscription: %w", err)
 		}
+		subscription := models.NewSubscriptionResponse(sub)
 		subscriptions = append(subscriptions, subscription)
 	}
 	return subscriptions, nil
 }
 
 func (s *SubscriptionRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.SubscriptionResponse, error) {
-	return nil, nil
+	query, params, err := sq.Select("*").From("subscriptions").Where("user_id = ?", userID).PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return nil, fmt.Errorf("error creating query: %w", err)
+	}
+
+	rows, err := s.pool.Query(ctx, query, params...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("no subscriptions found")
+		}
+		return nil, fmt.Errorf("error getting subscriptions: %w", err)
+	}
+
+	var subscriptions []models.SubscriptionResponse
+	for rows.Next() {
+		var sub models.Subscription
+		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning subscription: %w", err)
+		}
+		subscription := models.NewSubscriptionResponse(sub)
+		subscriptions = append(subscriptions, subscription)
+	}
+	return subscriptions, nil
 }
 
 func (s *SubscriptionRepo) GetByID(ctx context.Context, id uint64) (models.SubscriptionResponse, error) {
-	return models.SubscriptionResponse{}, nil
+	query, params, err := sq.Select("*").From("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return models.SubscriptionResponse{}, fmt.Errorf("error creating query: %w", err)
+	}
+
+	var sub models.Subscription
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+	if err != nil {
+		return models.SubscriptionResponse{}, fmt.Errorf("error getting subscription: %w", err)
+	}
+
+	subcription := models.NewSubscriptionResponse(sub)
+
+	return subcription, nil
 }
 
-func (s *SubscriptionRepo) Renew(ctx context.Context, id uint64) (uint64, error) {
-	return 0, nil
+func (s *SubscriptionRepo) RenewOrExtend(ctx context.Context, id uint64) (uint64, error) {
+	query, params, err := sq.Select(("*")).From("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("error creating query: %w", err)
+	}
+
+	var sub models.Subscription
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+	if err != nil {
+		return 0, fmt.Errorf("error getting subscription: %w", err)
+	}
+
+	var newStartDate time.Time
+	if sub.EndDate.After(time.Now()) {
+		newStartDate = sub.EndDate
+	} else {
+		newStartDate = time.Now()
+	}
+	newSubscription := models.Subscription{
+		ServiceName: sub.ServiceName,
+		Price:       sub.Price,
+		UserID:      sub.UserID,
+		StartDate:   newStartDate,
+		EndDate:     newStartDate.Add(sub.EndDate.Sub(sub.StartDate)),
+	}
+
+	query, params, err = sq.Insert("subscriptions").
+		Columns("service_name", "price", "user_id", "start_date", "end_date").
+		Values(newSubscription.ServiceName, newSubscription.Price, newSubscription.UserID, newSubscription.StartDate, newSubscription.EndDate).
+		Suffix("RETURNING id").
+		PlaceholderFormat(sq.Dollar).ToSql()
+
+	if err != nil {
+		return 0, fmt.Errorf("error creating query: %w", err)
+	}
+
+	var newId uint64
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&newId)
+	if err != nil {
+		return 0, fmt.Errorf("error getting subscription: %w", err)
+	}
+	return newId, nil
 }
 
 func (s *SubscriptionRepo) GetCost(ctx context.Context, userID uuid.UUID, serviceName string, start, end time.Time) (int, error) {
-	return 0, nil
+	query, params, err := sq.Select("SUM(price) AS total").From("subscriptions").
+		Where("user_id = ?", userID).
+		Where("service_name = ?", serviceName).
+		Where("start_date >= ?", start).
+		Where("end_date <= ?", end).
+		PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return 0, fmt.Errorf("error creating query: %w", err)
+	}
+
+	var totalcost int
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&totalcost)
+	if err != nil {
+		return 0, fmt.Errorf("error getting total: %w", err)
+	}
+	return totalcost, nil
 }
 
 func (s *SubscriptionRepo) Delete(ctx context.Context, id uint64) error {
+	query, params, err := sq.Delete("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
+	if err != nil {
+		return fmt.Errorf("error creating query: %w", err)
+	}
+	_, err = s.pool.Exec(ctx, query, params...)
+	if err != nil {
+		return fmt.Errorf("error deleting subscription: %w", err)
+	}
 	return nil
 }
 

@@ -2,14 +2,15 @@ package pg
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
 	"github.com/Joshdike/subscriptions_aggregator/internal/models"
+	"github.com/Joshdike/subscriptions_aggregator/internal/pkg/errors"
 	"github.com/Joshdike/subscriptions_aggregator/internal/repository"
 	"github.com/Joshdike/subscriptions_aggregator/internal/utils"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	sq "github.com/Masterminds/squirrel"
@@ -30,17 +31,17 @@ func NewSubscriptionRepo(pool *pgxpool.Pool) *SubscriptionRepo {
 func (s *SubscriptionRepo) Create(ctx context.Context, sub *models.SubscriptionRequest) (uint64, error) {
 	startDate, err := utils.ParseMonthYear(sub.StartDate)
 	if err != nil {
-		return 0, fmt.Errorf("invalid start date: %w", err)
+		return 0, fmt.Errorf("%w: invalid start date", errors.ErrInvalidInput)
 	}
 	endDate := startDate.AddDate(0, 1, 0)
 
 	if sub.EndDate != "" {
 		endDate, err = utils.ParseMonthYear(sub.EndDate)
 		if err != nil {
-			return 0, fmt.Errorf("invalid end date: %w", err)
+			return 0, fmt.Errorf("%w: invalid end date", errors.ErrInvalidInput)
 		}
 		if endDate.Before(startDate) {
-			return 0, fmt.Errorf("end date must be after start date")
+			return 0, fmt.Errorf("%w: end date must be after start date", errors.ErrInvalidInput)
 		}
 	}
 
@@ -76,11 +77,9 @@ func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.SubscriptionRes
 
 	rows, err := s.pool.Query(ctx, query, params...)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("no subscriptions found")
-		}
 		return nil, fmt.Errorf("error getting subscriptions: %w", err)
 	}
+	defer rows.Close()
 
 	var subscriptions []models.SubscriptionResponse
 	for rows.Next() {
@@ -103,11 +102,9 @@ func (s *SubscriptionRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([
 
 	rows, err := s.pool.Query(ctx, query, params...)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("no subscriptions found")
-		}
 		return nil, fmt.Errorf("error getting subscriptions: %w", err)
 	}
+	defer rows.Close()
 
 	var subscriptions []models.SubscriptionResponse
 	for rows.Next() {
@@ -131,6 +128,9 @@ func (s *SubscriptionRepo) GetByID(ctx context.Context, id uint64) (models.Subsc
 	var sub models.Subscription
 	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return models.SubscriptionResponse{}, fmt.Errorf("%w: subscription not found", errors.ErrSubscriptionNotFound)
+		}
 		return models.SubscriptionResponse{}, fmt.Errorf("error getting subscription: %w", err)
 	}
 
@@ -233,7 +233,7 @@ func (s *SubscriptionRepo) OverlapCheck(ctx context.Context, sub models.Subscrip
 	}
 
 	if count > 0 {
-		return fmt.Errorf("subscription already exists")
+		return fmt.Errorf("%w: wait till current subscription ends or extend it", errors.ErrAlreadyExists)
 	}
 
 	return nil

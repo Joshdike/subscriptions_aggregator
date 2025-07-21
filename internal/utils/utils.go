@@ -11,7 +11,8 @@ import (
 	er "github.com/Joshdike/subscriptions_aggregator/internal/pkg/errors"
 )
 
-// Parse "MM-YYYY" into time.Time
+// ParseMonthYear takes a string in the format "MM-YYYY" and returns a time.Time object representing the corresponding month and year.
+// If the input string is not in the expected format, an error is returned.
 func ParseMonthYear(dateStr string) (time.Time, error) {
 	// Split into month and year
 	parts := strings.Split(dateStr, "-")
@@ -24,13 +25,17 @@ func ParseMonthYear(dateStr string) (time.Time, error) {
 	return time.Parse(layout, dateStr)
 }
 
+// ErrorResponse structure
+// swagger:model ErrorResponse
+type ErrorResponse struct {
+	Error   string      `json:"error"`
+	Details interface{} `json:"details,omitempty"`
+}
+
+// WriteError writes a structures JSON error response based on the error type
+// 500 Internal Server Error is the default response for unknown errors
 func WriteError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "application/json")
-
-	type response struct {
-		Error   string      `json:"error"`
-		Details interface{} `json:"details,omitempty"`
-	}
 
 	// Default error message
 	message := "An error occurred"
@@ -57,17 +62,21 @@ func WriteError(w http.ResponseWriter, err error) {
 		message = "Validation failed"
 		status = http.StatusConflict
 		details = err.Error()
+	case errors.Is(err, er.ErrUnauthorized):
+		status = http.StatusUnauthorized
+		message = err.Error()
 	default:
 		status = http.StatusInternalServerError
 		details = "Internal server error"
 	}
 	w.WriteHeader(status)
 
-	writeErr := json.NewEncoder(w).Encode(response{
+	// Write the error response
+	writeErr := json.NewEncoder(w).Encode(ErrorResponse{
 		Error:   message,
 		Details: details,
 	})
-
+	// Handle encoding errors
 	if writeErr != nil {
 		http.Error(w, `{"error": "failed to encode error"}`, http.StatusInternalServerError)
 		return

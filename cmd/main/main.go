@@ -1,3 +1,13 @@
+// @title Subscriptions Aggregator API
+// @version 1.0
+// @description API for managing user subscriptions and cost calculations
+// @contact.name API Support
+// @contact.email dikejoshua@gmail.com
+// @host localhost:8080
+// @BasePath /
+// @securityDefinitions.apikey AdminAuth
+// @in header
+// @name secret-key
 package main
 
 import (
@@ -7,6 +17,7 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/Joshdike/subscriptions_aggregator/docs"
 	"github.com/Joshdike/subscriptions_aggregator/internal/handlers"
 	mw "github.com/Joshdike/subscriptions_aggregator/internal/middleware"
 	"github.com/Joshdike/subscriptions_aggregator/internal/repository/pg"
@@ -14,6 +25,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func main() {
@@ -42,6 +54,10 @@ func main() {
 	r.Use(middleware.Logger)    // Middleware for logging
 	r.Use(middleware.Recoverer) // Middleware for recovering from panics
 
+	// Swagger UI route
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("http://localhost:8080/swagger/doc.json")))
+
 	// Create a new Subscription repository
 	subRepo := pg.NewSubscriptionRepo(pool)
 
@@ -53,11 +69,11 @@ func main() {
 	r.Get("/subscriptions/user/{user_id}", h.GetSubscriptionByUserID)
 	r.Get("/subscriptions/{id}", h.GetSubscriptionByID)
 	r.Post("/subscriptions/{id}", h.RenewOrExtendSubscription)
-	r.Delete("/subscriptions/{id}", h.DeleteSubscription)
+	r.Patch("/subscriptions/{id}", h.DeleteSubscription)
 
 	r.Get("/costs/{user_id}", h.GetCostByDateRange)
 
-	// Admin routes
+	// Admin route
 	r.With(mw.AdminSecretMiddleware(os.Getenv("SECRET_KEY"))).Get("/subscriptions", h.GetSubscriptions)
 
 	// Get the port from environment variable and start the server

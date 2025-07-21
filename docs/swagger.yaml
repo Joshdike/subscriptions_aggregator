@@ -1,0 +1,298 @@
+basePath: /
+definitions:
+  models.AdminSubscriptionResponse:
+    properties:
+      deleted:
+        type: boolean
+      end_date:
+        type: string
+      id:
+        type: integer
+      price:
+        type: integer
+      service_name:
+        type: string
+      start_date:
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.SubscriptionRequest:
+    properties:
+      end_date:
+        description: optional end date in "MM-YYYY" format
+        type: string
+      price:
+        description: price  in rubles (e.g. 400 = 400 rubles)
+        type: integer
+      service_name:
+        description: name of the subscription service
+        type: string
+      start_date:
+        description: Date in "MM-YYYY" format (e.g., "01-2025")
+        type: string
+      user_id:
+        description: uuid of the suscribing user
+        type: string
+    type: object
+  models.SubscriptionResponse:
+    properties:
+      end_date:
+        type: string
+      id:
+        type: integer
+      price:
+        type: integer
+      service_name:
+        type: string
+      start_date:
+        type: string
+      user_id:
+        type: string
+    type: object
+  utils.ErrorResponse:
+    properties:
+      details: {}
+      error:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: dikejoshua@gmail.com
+    name: API Support
+  description: API for managing user subscriptions and cost calculations
+  title: Subscriptions Aggregator API
+  version: "1.0"
+paths:
+  /costs/{user_id}:
+    get:
+      description: Retrieves the cost of a subscription for a specific date range
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      - description: Service Name
+        in: query
+        name: service_name
+        required: true
+        type: string
+      - description: Start Date
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: End Date
+        in: query
+        name: to
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: integer
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get the cost of a subscription for a specific date range
+      tags:
+      - subscriptions
+  /subscriptions:
+    get:
+      description: Retrieves complete list of all subscriptions. Requires admin privileges.
+      parameters:
+      - description: Admin secret key
+        in: header
+        name: X-Admin-Secret
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.AdminSubscriptionResponse'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all subscriptions (Admin Only)
+      tags:
+      - admin
+    post:
+      consumes:
+      - application/json
+      description: Creates a new subscription for a user
+      parameters:
+      - description: Subscription creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.SubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Create a new subscription
+      tags:
+      - subscriptions
+  /subscriptions/{id}:
+    get:
+      description: Retrieves a specific subscription by its numeric ID
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.SubscriptionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get a specific subscription by ID
+      tags:
+      - subscriptions
+    patch:
+      description: Marks a subscription as deleted by setting 'deleted' flag to true
+        (does not permanently remove)
+      parameters:
+      - description: Subscription ID
+        in: path
+        minimum: 1
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Soft delete a subscription
+      tags:
+      - subscriptions
+    post:
+      description: Renews or extends an existing subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Renew or extend a subscription
+      tags:
+      - subscriptions
+  /subscriptions/user/{user_id}:
+    get:
+      description: Retrieves all subscriptions for a specific user
+      parameters:
+      - description: User ID
+        in: path
+        name: user_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.SubscriptionResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/utils.ErrorResponse'
+      summary: Get all subscriptions for a user
+      tags:
+      - subscriptions
+securityDefinitions:
+  AdminAuth:
+    in: header
+    name: secret-key
+    type: apiKey
+swagger: "2.0"

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     user_id UUID NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
     CHECK (end_date IS NULL OR end_date >= start_date) 
 );
 -- +goose StatementEnd

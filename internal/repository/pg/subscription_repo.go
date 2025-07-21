@@ -69,7 +69,7 @@ func (s *SubscriptionRepo) Create(ctx context.Context, sub *models.SubscriptionR
 	return id, nil
 }
 
-func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.SubscriptionResponse, error) {
+func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.AdminSubscriptionResponse, error) {
 	query, params, err := sq.Select("*").From("subscriptions").PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("error creating query: %w", err)
@@ -81,21 +81,21 @@ func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.SubscriptionRes
 	}
 	defer rows.Close()
 
-	var subscriptions []models.SubscriptionResponse
+	var subscriptions []models.AdminSubscriptionResponse
 	for rows.Next() {
-		var sub models.Subscription
-		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+		var sub models.AdminSubscription
+		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate, &sub.Deleted)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning subscription: %w", err)
 		}
-		subscription := models.NewSubscriptionResponse(sub)
+		subscription := models.NewAdminSubscriptionResponse(sub)
 		subscriptions = append(subscriptions, subscription)
 	}
 	return subscriptions, nil
 }
 
 func (s *SubscriptionRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([]models.SubscriptionResponse, error) {
-	query, params, err := sq.Select("*").From("subscriptions").Where("user_id = ?", userID).PlaceholderFormat(sq.Dollar).ToSql()
+	query, params, err := sq.Select("*").From("subscriptions").Where("user_id = ?", userID).Where("deleted = false").PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("error creating query: %w", err)
 	}
@@ -120,7 +120,7 @@ func (s *SubscriptionRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([
 }
 
 func (s *SubscriptionRepo) GetByID(ctx context.Context, id uint64) (models.SubscriptionResponse, error) {
-	query, params, err := sq.Select("*").From("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
+	query, params, err := sq.Select("*").From("subscriptions").Where("id = ?", id).Where("deleted = false").PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
 		return models.SubscriptionResponse{}, fmt.Errorf("error creating query: %w", err)
 	}
@@ -203,7 +203,7 @@ func (s *SubscriptionRepo) GetCost(ctx context.Context, userID uuid.UUID, servic
 }
 
 func (s *SubscriptionRepo) Delete(ctx context.Context, id uint64) error {
-	query, params, err := sq.Delete("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
+	query, params, err := sq.Update("subscriptions").Set("deleted", true).Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
 		return fmt.Errorf("error creating query: %w", err)
 	}

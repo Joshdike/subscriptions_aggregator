@@ -1,9 +1,9 @@
-// Package pg implements the SubscriptionRepository using PostgreSQL.  
-//  
-// Key behaviors:  
-//   - Uses soft deletes (sets `deleted = true` instead of hard deletions)  
-//   - Validates subscription date ranges and overlaps  
-//   - Converts dates to/from "MM-YYYY" format where needed 
+// Package pg implements the SubscriptionRepository using PostgreSQL.
+//
+// Key behaviors:
+//   - Uses soft deletes (sets `deleted = true` instead of hard deletions)
+//   - Validates subscription date ranges and overlaps
+//   - Converts dates to/from "MM-YYYY" format where needed
 package pg
 
 import (
@@ -34,15 +34,15 @@ func NewSubscriptionRepo(pool *pgxpool.Pool) *SubscriptionRepo {
 	}
 }
 
-// Create inserts a new subscription after validating:  
-//   - Start/end dates (must be in "MM-YYYY" format)  
-//   - End date >= Start date (if provided)  
-//   - No overlapping subscriptions for the same user/service  
-//  
-// Returns:  
-//   - ID of the new subscription on success  
-//   - ErrInvalidInput if dates are invalid or out of order  
-//   - ErrAlreadyExists if an overlapping subscription exists 
+// Create inserts a new subscription after validating:
+//   - Start/end dates (must be in "MM-YYYY" format)
+//   - End date >= Start date (if provided)
+//   - No overlapping subscriptions for the same user/service
+//
+// Returns:
+//   - ID of the new subscription on success
+//   - ErrInvalidInput if dates are invalid or out of order
+//   - ErrAlreadyExists if an overlapping subscription exists
 func (s *SubscriptionRepo) Create(ctx context.Context, sub *models.SubscriptionRequest) (uint64, error) {
 	startDate, err := utils.ParseMonthYear(sub.StartDate)
 	if err != nil {
@@ -84,7 +84,6 @@ func (s *SubscriptionRepo) Create(ctx context.Context, sub *models.SubscriptionR
 	return id, nil
 }
 
-
 func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.AdminSubscriptionResponse, error) {
 	query, params, err := sq.Select("*").From("subscriptions").PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
@@ -99,7 +98,7 @@ func (s *SubscriptionRepo) GetAll(ctx context.Context) ([]models.AdminSubscripti
 
 	var subscriptions []models.AdminSubscriptionResponse
 	for rows.Next() {
-		var sub models.AdminSubscription
+		var sub models.Subscription
 		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate, &sub.Deleted)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning subscription: %w", err)
@@ -125,7 +124,7 @@ func (s *SubscriptionRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([
 	var subscriptions []models.SubscriptionResponse
 	for rows.Next() {
 		var sub models.Subscription
-		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+		err = rows.Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate, &sub.Deleted)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning subscription: %w", err)
 		}
@@ -142,7 +141,7 @@ func (s *SubscriptionRepo) GetByID(ctx context.Context, id uint64) (models.Subsc
 	}
 
 	var sub models.Subscription
-	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate, &sub.Deleted)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return models.SubscriptionResponse{}, fmt.Errorf("%w: subscription not found", errors.ErrSubscriptionNotFound)
@@ -155,13 +154,13 @@ func (s *SubscriptionRepo) GetByID(ctx context.Context, id uint64) (models.Subsc
 	return subcription, nil
 }
 
-// RenewOrExtend creates a new subscription based on an existing one:  
-//   - If the current subscription is active, starts the new one at the end date  
-//   - If expired, starts the new one from the current time  
-//   - Preserves the original duration (EndDate - StartDate)  
-//  
-// Returns:  
-//   - ID of the new subscription  
+// RenewOrExtend creates a new subscription based on an existing one:
+//   - If the current subscription is active, starts the new one at the end date
+//   - If expired, starts the new one from the current time
+//   - Preserves the original duration (EndDate - StartDate)
+//
+// Returns:
+//   - ID of the new subscription
 //   - ErrSubscriptionNotFound if the original subscription doesn't exist
 func (s *SubscriptionRepo) RenewOrExtend(ctx context.Context, id uint64) (uint64, error) {
 	query, params, err := sq.Select(("*")).From("subscriptions").Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
@@ -170,7 +169,7 @@ func (s *SubscriptionRepo) RenewOrExtend(ctx context.Context, id uint64) (uint64
 	}
 
 	var sub models.Subscription
-	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate)
+	err = s.pool.QueryRow(ctx, query, params...).Scan(&sub.ID, &sub.ServiceName, &sub.Price, &sub.UserID, &sub.StartDate, &sub.EndDate, &sub.Deleted)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return 0, fmt.Errorf("%w: subscription not found", errors.ErrSubscriptionNotFound)
@@ -190,11 +189,12 @@ func (s *SubscriptionRepo) RenewOrExtend(ctx context.Context, id uint64) (uint64
 		UserID:      sub.UserID,
 		StartDate:   newStartDate,
 		EndDate:     newStartDate.Add(sub.EndDate.Sub(sub.StartDate)),
+		Deleted:     false,
 	}
 
 	query, params, err = sq.Insert("subscriptions").
-		Columns("service_name", "price", "user_id", "start_date", "end_date").
-		Values(newSubscription.ServiceName, newSubscription.Price, newSubscription.UserID, newSubscription.StartDate, newSubscription.EndDate).
+		Columns("service_name", "price", "user_id", "start_date", "end_date", "deleted").
+		Values(newSubscription.ServiceName, newSubscription.Price, newSubscription.UserID, newSubscription.StartDate, newSubscription.EndDate, newSubscription.Deleted).
 		Suffix("RETURNING id").
 		PlaceholderFormat(sq.Dollar).ToSql()
 
@@ -210,10 +210,10 @@ func (s *SubscriptionRepo) RenewOrExtend(ctx context.Context, id uint64) (uint64
 	return newId, nil
 }
 
-// GetCost calculates the total cost of subscriptions for a user/service  
-// within a specific date range (inclusive).  
-//  
-// Returns:  
+// GetCost calculates the total cost of subscriptions for a user/service
+// within a specific date range (inclusive).
+//
+// Returns:
 //   - Total cost (sum of prices) in rubles
 func (s *SubscriptionRepo) GetCost(ctx context.Context, userID uuid.UUID, serviceName string, start, end time.Time) (int, error) {
 	query, params, err := sq.Select("SUM(price) AS total").From("subscriptions").
@@ -235,7 +235,8 @@ func (s *SubscriptionRepo) GetCost(ctx context.Context, userID uuid.UUID, servic
 }
 
 // (Soft) Delete marks a subscription as deleted
-//  by setting 'deleted' flag to true (does not permanently remove)
+//
+//	by setting 'deleted' flag to true (does not permanently remove)
 func (s *SubscriptionRepo) Delete(ctx context.Context, id uint64) error {
 	query, params, err := sq.Update("subscriptions").Set("deleted", true).Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
 	if err != nil {
@@ -248,10 +249,10 @@ func (s *SubscriptionRepo) Delete(ctx context.Context, id uint64) error {
 	return nil
 }
 
-// OverlapCheck verifies no existing subscription for the same user/service  
-// overlaps with the proposed date range.  
-//  
-// Returns:  
+// OverlapCheck verifies no existing subscription for the same user/service
+// overlaps with the proposed date range.
+//
+// Returns:
 //   - ErrAlreadyExists if an overlap is detected
 func (s *SubscriptionRepo) OverlapCheck(ctx context.Context, sub models.Subscription) error {
 	query, params, err := sq.Select("COUNT(*)").

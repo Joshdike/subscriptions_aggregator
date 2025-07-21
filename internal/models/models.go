@@ -20,15 +20,6 @@ type SubscriptionRequest struct {
 }
 
 type Subscription struct {
-	ID          uint64    `json:"id"` 
-	ServiceName string    `json:"service_name"` 
-	Price       int       `json:"price"` 
-	UserID      uuid.UUID `json:"user_id"` 
-	StartDate   time.Time `json:"start_date"` 
-	EndDate     time.Time `json:"end_date"`
-}
-
-type AdminSubscription struct {
 	ID          uint64    `json:"id"`
 	ServiceName string    `json:"service_name"`
 	Price       int       `json:"price"`
@@ -70,7 +61,7 @@ func NewSubscriptionResponse(sub Subscription) SubscriptionResponse {
 	}
 }
 
-func NewAdminSubscriptionResponse(sub AdminSubscription) AdminSubscriptionResponse {
+func NewAdminSubscriptionResponse(sub Subscription) AdminSubscriptionResponse {
 	return AdminSubscriptionResponse{
 		ID:          sub.ID,
 		ServiceName: sub.ServiceName,

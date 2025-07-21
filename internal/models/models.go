@@ -1,6 +1,6 @@
 // Package models contains the core data structures for subscriptions
 // Includes: 
-//   - Database/domain models (Subscription, AdminSubscription)  
+//   - Database/domain models (Subscription)  
 //   - API request/response DTOs  
 //   - Conversion helpers between formats 
 package models

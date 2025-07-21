@@ -235,7 +235,6 @@ func (s *SubscriptionRepo) GetCost(ctx context.Context, userID uuid.UUID, servic
 }
 
 // (Soft) Delete marks a subscription as deleted
-//
 //	by setting 'deleted' flag to true (does not permanently remove)
 func (s *SubscriptionRepo) Delete(ctx context.Context, id uint64) error {
 	query, params, err := sq.Update("subscriptions").Set("deleted", true).Where("id = ?", id).PlaceholderFormat(sq.Dollar).ToSql()
